@@ -3,15 +3,22 @@ use postflop_solver::*;
 use wasm_bindgen::prelude::*;
 
 #[cfg(not(feature = "rayon"))]
-struct DummyPool;
+use once_cell::sync::Lazy;
 #[cfg(not(feature = "rayon"))]
-static mut THREAD_POOL: Option<DummyPool> = None;
+use std::sync::Mutex;
+#[cfg(not(feature = "rayon"))]
+struct DummyPool;
+
 #[cfg(not(feature = "rayon"))]
 impl DummyPool {
-    fn install<OP: FnOnce() -> R, R: Default>(&self, _op: OP) -> R {
-        R::default()
+    fn install<OP: FnOnce() -> R, R: Default>(&self, op: OP) -> R {
+        // You can call the closure or simply return the default value.
+        op()
     }
 }
+
+#[cfg(not(feature = "rayon"))]
+static THREAD_POOL: Lazy<Mutex<Option<DummyPool>>> = Lazy::new(|| Mutex::new(None));
 
 #[cfg(feature = "rayon")]
 mod rayon_adapter;
@@ -212,9 +219,25 @@ impl GameManager {
     }
 
     pub fn solve_step(&self, current_iteration: u32) {
-        unsafe {
-            if let Some(pool) = THREAD_POOL.as_ref() {
-                pool.install(|| solve_step(&self.game, current_iteration));
+        #[cfg(feature = "rayon")]
+        {
+            if let Ok(lock) = THREAD_POOL.lock() {
+                if let Some(ref pool) = *lock {
+                    pool.install(|| solve_step(&self.game, current_iteration));
+                    return;
+                }
+            }
+            // Fallback if the pool isn’t set.
+            solve_step(&self.game, current_iteration);
+        }
+        #[cfg(not(feature = "rayon"))]
+        {
+            if let Ok(lock) = THREAD_POOL.lock() {
+                if let Some(pool) = &*lock {
+                    pool.install(|| solve_step(&self.game, current_iteration));
+                } else {
+                    solve_step(&self.game, current_iteration);
+                }
             } else {
                 solve_step(&self.game, current_iteration);
             }
@@ -222,9 +245,23 @@ impl GameManager {
     }
 
     pub fn exploitability(&self) -> f32 {
-        unsafe {
-            if let Some(pool) = THREAD_POOL.as_ref() {
-                pool.install(|| compute_exploitability(&self.game))
+        #[cfg(feature = "rayon")]
+        {
+            if let Ok(lock) = THREAD_POOL.lock() {
+                if let Some(ref pool) = *lock {
+                    return pool.install(|| compute_exploitability(&self.game));
+                }
+            }
+            compute_exploitability(&self.game)
+        }
+        #[cfg(not(feature = "rayon"))]
+        {
+            if let Ok(lock) = THREAD_POOL.lock() {
+                if let Some(pool) = &*lock {
+                    pool.install(|| compute_exploitability(&self.game))
+                } else {
+                    compute_exploitability(&self.game)
+                }
             } else {
                 compute_exploitability(&self.game)
             }
@@ -232,9 +269,25 @@ impl GameManager {
     }
 
     pub fn finalize(&mut self) {
-        unsafe {
-            if let Some(pool) = THREAD_POOL.as_ref() {
-                pool.install(|| finalize(&mut self.game));
+        #[cfg(feature = "rayon")]
+        {
+            if let Ok(lock) = THREAD_POOL.lock() {
+                if let Some(ref pool) = *lock {
+                    pool.install(|| finalize(&mut self.game));
+                    return;
+                }
+            }
+            // Fallback if the pool isn’t set.
+            finalize(&mut self.game);
+        }
+        #[cfg(not(feature = "rayon"))]
+        {
+            if let Ok(lock) = THREAD_POOL.lock() {
+                if let Some(pool) = &*lock {
+                    pool.install(|| finalize(&mut self.game));
+                } else {
+                    finalize(&mut self.game);
+                }
             } else {
                 finalize(&mut self.game);
             }
