@@ -1,51 +1,24 @@
 <template>
   <div class="flex w-full h-full">
-    <div
-      class="flex flex-col h-full items-center pt-[1%] gap-[1%]"
-      style="flex: 4"
-    >
-      <div
-        v-for="suit in 4"
-        :key="suit"
-        class="flex shrink-0 w-full justify-center gap-[1%]"
-      >
+    <div class="flex flex-col h-full items-center pt-[1%] gap-[1%]" style="flex: 4">
+      <div v-for="suit in 4" :key="suit" class="flex shrink-0 w-full justify-center gap-[1%]">
         <div class="w-[3.25rem]"></div>
-        <BoardSelectorCard
-          v-for="rank in 13"
-          :key="rank"
-          class="disabled:opacity-75 disabled:brightness-75"
-          font-size="max(1.2vw, 13px)"
-          width="5.5%"
-          :card-id="56 - 4 * rank - suit"
+        <BoardSelectorCard v-for="rank in 13" :key="rank" class="disabled:opacity-75 disabled:brightness-75"
+          font-size="max(1.2vw, 13px)" width="5.5%" :card-id="56 - 4 * rank - suit"
           :disabled="selectedChance.cards[56 - 4 * rank - suit].isDead"
-          :is-selected="selectedChance.selectedIndex === 56 - 4 * rank - suit"
-          @click="deal(56 - 4 * rank - suit)"
-        />
+          :is-selected="selectedChance.selectedIndex === 56 - 4 * rank - suit" @click="deal(56 - 4 * rank - suit)" />
         <div></div>
       </div>
 
-      <div
-        ref="chartParentDiv"
-        class="relative flex-grow max-h-[50%] my-1.5"
-        style="width: calc(84.5% + 3.25rem)"
-      >
-        <div
-          v-if="chanceReports && chartParentDivHeight >= 180"
-          class="absolute left-0 top-0 w-full h-full"
-        >
+      <div ref="chartParentDiv" class="relative flex-grow max-h-[50%] my-1.5" style="width: calc(84.5% + 3.25rem)">
+        <div v-if="chanceReports && chartParentDivHeight >= 180" class="absolute left-0 top-0 w-full h-full">
           <Bar :data="chartData!" :options="chartOptions" />
         </div>
       </div>
     </div>
 
-    <ResultTable
-      style="flex: 3"
-      table-mode="chance"
-      :chance-type="selectedChance.player"
-      :selected-spot="selectedSpot"
-      :chance-reports="chanceReports"
-      :display-player="displayPlayer"
-    />
+    <ResultTable style="flex: 3" table-mode="chance" :chance-type="selectedChance.player" :selected-spot="selectedSpot"
+      :chance-reports="chanceReports" :display-player="displayPlayer" />
   </div>
 </template>
 
@@ -198,8 +171,8 @@ export default defineComponent({
           options.chartChance === "eq"
             ? reports.equity[playerIndex]
             : options.chartChance === "ev"
-            ? reports.ev[playerIndex]
-            : reports.eqr[playerIndex];
+              ? reports.ev[playerIndex]
+              : reports.eqr[playerIndex];
         datasets = Array.from({ length: 4 }, (_, suit) => ({
           data: Array.from(
             { length: 13 },
@@ -216,10 +189,10 @@ export default defineComponent({
 
     const chartOptions = computed((): ChartOptions<"bar"> => {
       const option = props.displayOptions.chartChance;
-      const style = ["strategy", "eq", "eqr"].includes(option)
+      const style: "percent" | "decimal" = ["strategy", "eq", "eqr"].includes(option)
         ? "percent"
         : "decimal";
-      const format = { style, useGrouping: false, minimumFractionDigits: 0 };
+      const format: Intl.NumberFormatOptions = { style, useGrouping: false, minimumFractionDigits: 0 };
 
       const titleText =
         props.displayPlayer.toUpperCase() +
@@ -242,7 +215,11 @@ export default defineComponent({
             stacked: true,
             min: ["ev", "eqr"].includes(option) ? undefined : 0,
             max: option === "strategy" ? 1 : undefined,
-            ticks: { format },
+            ticks: {
+              callback: (tickValue: string | number, index: number, ticks: any[]) => {
+                return new Intl.NumberFormat(undefined, format).format(Number(tickValue));
+              },
+            },
             afterFit(axis) {
               axis.width = 52;
             },
